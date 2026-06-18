@@ -54,7 +54,11 @@ async def run_montecarlo(
             detail=f"Monte Carlo simulation failed: {exc}",
         )
 
-    return {"run_id": mc_run.id, "backtest_id": mc_run.backtest_id, "n_simulations": mc_run.n_simulations}
+    return {
+        "run_id": mc_run.id,
+        "backtest_id": mc_run.backtest_id,
+        "n_simulations": mc_run.n_simulations,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -66,53 +70,40 @@ async def run_montecarlo(
     response_model=MCResultsResponse,
     summary="Get Monte Carlo results",
 )
-async def get_results(
+async def get_mc_results(
     run_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Return the full results for a Monte Carlo run.
-
-    Includes
-    --------
-    - Summary statistics (mean/median/max/min final balance, return %).
-    - Average and worst max-drawdown across all paths.
-    - Risk of ruin (fraction ending below 50% of initial balance).
-    - Equity curves packed for Plotly (x/y with None separators, ≤500 paths).
-    - Final-balance histogram (50 bins).
-    - Max-drawdown histogram (50 bins, in percent).
-    """
+    """Fetch the full results for a completed MC run."""
     try:
-        results = await montecarlo_service.get_results(run_id, db)
+        return await montecarlo_service.get_results(run_id, db)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
-
-    return results
 
 
 # ---------------------------------------------------------------------------
 # List runs for a backtest
 # ---------------------------------------------------------------------------
 
-@router.get("/runs/{backtest_id}", summary="List all MC runs for a backtest")
-async def list_mc_runs(backtest_id: int, db: AsyncSession = Depends(get_db)):
-    """Return all Monte Carlo runs for a given backtest, ordered newest first."""
+@router.get("/runs/{backtest_id}", summary="List MC runs for a backtest")
+async def list_mc_runs(
+    backtest_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return all Monte Carlo runs for a given backtest, newest first."""
     try:
         runs = await montecarlo_service.list_mc_runs(backtest_id, db)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    return {
-        "backtest_id": backtest_id,
-        "runs": [
-            {
-                "run_id": r.id,
-                "n_simulations": r.n_simulations,
-                "initial_balance": r.initial_balance,
-                "created_at": str(r.created_at),
-            }
-            for r in runs
-        ],
-    }
+    return [
+        {
+            "run_id": r.id,
+            "backtest_id": r.backtest_id,
+            "n_simulations": r.n_simulations,
+            "initial_balance": r.initial_balance,
+        }
+        for r in runs
+    ]

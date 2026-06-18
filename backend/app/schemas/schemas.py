@@ -12,14 +12,16 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 class ImportStatusResponse(BaseModel):
-    ga_session_id: Optional[int]
-    ga_filename: Optional[str]
-    ga_row_count: int
-    ga_columns: List[str]
-    ohlcv_session_id: Optional[int]
-    ohlcv_filename: Optional[str]
-    ohlcv_row_count: int
-    ready: bool
+    ga_session_id: Optional[int] = None
+    ga_filename: Optional[str] = None
+    ga_row_count: int = 0
+    ga_columns: List[str] = []
+    ohlcv_session_id: Optional[int] = None
+    ohlcv_filename: Optional[str] = None
+    ohlcv_row_count: int = 0
+    ohlcv_date_from: Optional[str] = None
+    ohlcv_date_to: Optional[str] = None
+    ready: bool = False
 
 
 class GAUploadResponse(BaseModel):
@@ -33,8 +35,8 @@ class OHLCVUploadResponse(BaseModel):
     session_id: int
     filename: str
     row_count: int
-    date_from: Optional[str]
-    date_to: Optional[str]
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -43,8 +45,8 @@ class OHLCVUploadResponse(BaseModel):
 
 class ColumnRange(BaseModel):
     name: str
-    min_val: Optional[float]
-    max_val: Optional[float]
+    min_val: Optional[float] = None
+    max_val: Optional[float] = None
     dtype: str  # 'numeric' | 'string'
 
 
@@ -97,7 +99,7 @@ class BacktestRunRequest(BaseModel):
 class BacktestRunResponse(BaseModel):
     backtest_id: int
     status: str
-    error: Optional[str]
+    error: Optional[str] = None
 
 
 class TradeResponse(BaseModel):
@@ -127,9 +129,9 @@ class BacktestListItem(BaseModel):
     ohlcv_session_id: int
     status: str
     trade_count: int
-    net_profit: Optional[float]
+    net_profit: Optional[float] = None
     created_at: str
-    error_msg: Optional[str]
+    error_msg: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

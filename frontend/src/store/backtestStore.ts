@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { Strategy, BacktestResult, Trade, FilterResultRow } from '../types';
-import { uploadStrategy, listStrategies, runBacktest, getTrades } from '../api/backtestApi';
+import type { Strategy, BacktestResult, Trade, FilterResultRow, BacktestRunRequest } from '../types';
+import { uploadStrategy, listStrategies, runBacktest, getTrades, listBacktests } from '../api/backtestApi';
 
 interface BacktestState {
   strategies: Strategy[];
@@ -9,17 +9,25 @@ interface BacktestState {
   currentBacktest: BacktestResult | null;
   trades: Trade[];
   totalTrades: number;
+  recentBacktests: any[];
   isRunning: boolean;
   isLoadingStrategies: boolean;
   isLoadingTrades: boolean;
+  isLoadingHistory: boolean;
   error: string | null;
 
   setSelectedStrategy: (s: Strategy | null) => void;
   setSelectedParameterRow: (row: FilterResultRow | null) => void;
   uploadStrategy: (file: File) => Promise<void>;
   fetchStrategies: () => Promise<void>;
-  runBacktest: (gaSessionId: number, ohlcvSessionId: number) => Promise<void>;
+  /**
+   * Run a backtest.
+   * @param gaRowId  - the specific GA row ID (FilterResultRow.id)
+   * @param ohlcvSessionId - OHLCVSession id
+   */
+  runBacktest: (gaRowId: number, ohlcvSessionId: number) => Promise<void>;
   fetchTrades: (backtestId: number, page?: number, limit?: number) => Promise<void>;
+  fetchRecentBacktests: (limit?: number) => Promise<void>;
   clearError: () => void;
   reset: () => void;
 }
@@ -31,28 +39,33 @@ export const useBacktestStore = create<BacktestState>((set, get) => ({
   currentBacktest: null,
   trades: [],
   totalTrades: 0,
+  recentBacktests: [],
   isRunning: false,
   isLoadingStrategies: false,
   isLoadingTrades: false,
+  isLoadingHistory: false,
   error: null,
 
   setSelectedStrategy: (s) => set({ selectedStrategy: s }),
   setSelectedParameterRow: (row) => set({ selectedParameterRow: row }),
 
   uploadStrategy: async (file: File) => {
+    set({ isLoadingStrategies: true, error: null });
     try {
-      const strategy = await uploadStrategy(file);
-      set((state) => ({
-        strategies: [...state.strategies, strategy],
-        selectedStrategy: strategy,
-      }));
+      await uploadStrategy(file);
+      // Refresh list after upload
+      const strategies = await listStrategies();
+      set({ strategies, isLoadingStrategies: false });
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : 'Upload failed' });
+      set({
+        error: err instanceof Error ? err.message : 'Upload failed',
+        isLoadingStrategies: false,
+      });
     }
   },
 
   fetchStrategies: async () => {
-    set({ isLoadingStrategies: true });
+    set({ isLoadingStrategies: true, error: null });
     try {
       const strategies = await listStrategies();
       set({ strategies, isLoadingStrategies: false });
@@ -64,23 +77,28 @@ export const useBacktestStore = create<BacktestState>((set, get) => ({
     }
   },
 
-  runBacktest: async (gaSessionId: number, ohlcvSessionId: number) => {
-    const { selectedStrategy, selectedParameterRow } = get();
-    if (!selectedStrategy || !selectedParameterRow) {
-      set({ error: 'Please select a strategy and parameter set' });
+  runBacktest: async (gaRowId: number, ohlcvSessionId: number) => {
+    const { selectedStrategy } = get();
+    if (!selectedStrategy) {
+      set({ error: 'No strategy selected' });
       return;
     }
-    set({ isRunning: true, error: null, currentBacktest: null, trades: [] });
+
+    const req: BacktestRunRequest = {
+      ga_row_id: gaRowId,
+      strategy_id: selectedStrategy.id,
+      ohlcv_session_id: ohlcvSessionId,
+    };
+
+    set({ isRunning: true, error: null, currentBacktest: null, trades: [], totalTrades: 0 });
     try {
-      const result = await runBacktest({
-        ga_session_id: gaSessionId,
-        ohlcv_session_id: ohlcvSessionId,
-        strategy_id: selectedStrategy.id,
-        parameters: selectedParameterRow.data as Record<string, number | string>,
-      });
+      const result = await runBacktest(req);
       set({ currentBacktest: result, isRunning: false });
-      if (result.backtest_id) {
-        await get().fetchTrades(result.backtest_id);
+
+      // Auto-fetch trades if successful
+      if (result.status === 'done') {
+        const { fetchTrades } = get();
+        await fetchTrades(result.backtest_id);
       }
     } catch (err) {
       set({
@@ -101,19 +119,29 @@ export const useBacktestStore = create<BacktestState>((set, get) => ({
       });
     } catch (err) {
       set({
-        error: err instanceof Error ? err.message : 'Failed to load trades',
+        error: err instanceof Error ? err.message : 'Failed to fetch trades',
         isLoadingTrades: false,
       });
     }
   },
 
+  fetchRecentBacktests: async (limit = 50) => {
+    set({ isLoadingHistory: true });
+    try {
+      const data = await listBacktests(limit);
+      set({ recentBacktests: data, isLoadingHistory: false });
+    } catch {
+      set({ isLoadingHistory: false });
+    }
+  },
+
   clearError: () => set({ error: null }),
+
   reset: () =>
     set({
       currentBacktest: null,
       trades: [],
       totalTrades: 0,
       error: null,
-      isRunning: false,
     }),
 }));

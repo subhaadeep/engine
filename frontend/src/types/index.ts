@@ -1,3 +1,4 @@
+// ── Import ────────────────────────────────────────────────────────────────
 export interface GASession {
   id: number;
   filename: string;
@@ -21,14 +22,17 @@ export interface ImportStatus {
   ohlcv_session_id: number | null;
   ohlcv_filename: string | null;
   ohlcv_row_count: number;
+  ohlcv_date_from?: string | null;
+  ohlcv_date_to?: string | null;
   ready: boolean;
 }
 
+// ── Filter ────────────────────────────────────────────────────────────────
 export interface ColumnRange {
   name: string;
-  min_val: number;
-  max_val: number;
-  dtype: string;
+  min_val: number | null;
+  max_val: number | null;
+  dtype: string; // 'numeric' | 'string'
 }
 
 export interface FilterRule {
@@ -54,7 +58,32 @@ export interface FilterResultRow {
 export interface FilterResponse {
   results: FilterResultRow[];
   total_matching: number;
-  returned: number;
+}
+
+// ── Strategy / Backtest ───────────────────────────────────────────────────
+export interface Strategy {
+  id: number;
+  filename: string;
+  created_at?: string;
+}
+
+/**
+ * Payload sent to POST /api/backtest/run
+ * Matches backend BacktestRunRequest schema exactly.
+ */
+export interface BacktestRunRequest {
+  ga_row_id: number;        // ID of the specific GARow to use
+  strategy_id: number;      // ID of the uploaded Strategy
+  ohlcv_session_id: number; // ID of the OHLCVSession
+}
+
+/** @deprecated use BacktestRunRequest */
+export type BacktestRequest = BacktestRunRequest;
+
+export interface BacktestResult {
+  backtest_id: number;
+  status: string;
+  error: string | null;
 }
 
 export interface Trade {
@@ -77,24 +106,19 @@ export interface TradesResponse {
   limit: number;
 }
 
-export interface Strategy {
+export interface BacktestListItem {
   id: number;
-  filename: string;
-}
-
-export interface BacktestRequest {
-  ga_session_id: number;
-  ohlcv_session_id: number;
+  ga_row_id: number;
   strategy_id: number;
-  parameters: Record<string, number | string>;
-}
-
-export interface BacktestResult {
-  backtest_id: number;
+  ohlcv_session_id: number;
   status: string;
-  error: string | null;
+  trade_count: number;
+  net_profit: number | null;
+  created_at: string;
+  error_msg: string | null;
 }
 
+// ── Monte Carlo ───────────────────────────────────────────────────────────
 export interface MonteCarloRequest {
   backtest_id: number;
   n_simulations: number;
@@ -106,19 +130,26 @@ export interface MCRunResponse {
   status: string;
 }
 
+/**
+ * Matches backend MCResultsResponse schema exactly.
+ */
 export interface MCResults {
-  mean_return: number;
-  median_return: number;
-  max_return: number;
-  min_return: number;
+  run_id: number;
+  backtest_id: number;
+  n_simulations: number;
+  initial_balance: number;
+  mean_final_balance: number;
+  median_final_balance: number;
+  max_final_balance: number;
+  min_final_balance: number;
+  mean_return_pct: number;
+  median_return_pct: number;
   avg_drawdown: number;
   worst_drawdown: number;
   risk_of_ruin: number;
   equity_curves_packed: { x: (number | null)[]; y: (number | null)[] };
-  balance_histogram: { bins: number[]; counts: number[] };
-  drawdown_histogram: { bins: number[]; counts: number[] };
-  initial_balance: number;
-  n_simulations: number;
+  balance_histogram: { bin_edges: number[]; counts: number[] };
+  drawdown_histogram: { bin_edges: number[]; counts: number[] };
 }
 
 export type NavPage = 'import' | 'filter' | 'explorer' | 'backtest' | 'montecarlo';

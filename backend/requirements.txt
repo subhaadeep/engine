@@ -1,14 +1,22 @@
-fastapi==0.115.5
-uvicorn[standard]==0.34.0
-aiosqlite==0.21.0
-sqlalchemy==2.0.36
-sqlmodel==0.0.22
-alembic==1.14.0
-pandas==2.2.3
-numpy==1.26.4
-numba==0.60.0
-python-multipart==0.0.12
-aiofiles==24.1.0
-restrictedpython==7.4
-openpyxl==3.1.5
-pydantic-settings==2.7.0
+# Core
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+
+# Database
+sqlalchemy>=2.0.30
+sqlmodel>=0.0.19
+aiosqlite>=0.20.0
+
+# Data processing
+pandas>=2.2.0
+numpy>=1.26.0
+
+# Optional: Numba JIT acceleration for Monte Carlo
+# Comment out if Numba install fails; pure-numpy fallback is automatic.
+numba>=0.59.0
+
+# Dev utilities
+python-multipart>=0.0.9
+httpx>=0.27.0

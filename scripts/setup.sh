@@ -1,52 +1,32 @@
 #!/usr/bin/env bash
-# ─────────────────────────────────────────────────────────────────────────────
-# setup.sh — First-time project setup
-# Installs all dependencies for backend + frontend
-# ─────────────────────────────────────────────────────────────────────────────
-set -e
+# setup.sh — one-time environment setup for the GA Parameter Explorer engine
+set -euo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+echo "==> Setting up GA Parameter Explorer..."
 
-echo "═══════════════════════════════════════════════════════"
-echo "  GA Parameter Explorer — First-time Setup"
-echo "═══════════════════════════════════════════════════════"
-
-# ─── Python backend ──────────────────────────────────────────────────────────
-echo ""
-echo "[SETUP] Setting up Python backend..."
-cd "$PROJECT_ROOT/backend"
-
-if [ ! -d ".venv" ]; then
-  echo "[SETUP] Creating Python 3.11+ virtual environment..."
-  python3 -m venv .venv
+# ── Rust / Tauri prerequisites ────────────────────────────────────────────
+if ! command -v rustup &>/dev/null; then
+  echo "  Installing Rust via rustup..."
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+  source "$HOME/.cargo/env"
+else
+  echo "  Rust already installed: $(rustc --version)"
 fi
 
+# ── Python backend ────────────────────────────────────────────────────────
+echo "  Setting up Python venv..."
+cd backend
+python3 -m venv .venv
 source .venv/bin/activate
-echo "[SETUP] Installing Python dependencies..."
-pip install --upgrade pip -q
+pip install --upgrade pip
 pip install -r requirements.txt
+deactivate
+cd ..
 
-echo "[SETUP] Python backend setup complete."
-
-# ─── Node.js frontend ────────────────────────────────────────────────────────
-echo ""
-echo "[SETUP] Setting up Node.js frontend..."
-cd "$PROJECT_ROOT/frontend"
+# ── Node frontend ────────────────────────────────────────────────────────
+echo "  Installing Node dependencies..."
+cd frontend
 npm install
+cd ..
 
-echo "[SETUP] Node.js frontend setup complete."
-
-# ─── Create data directory ───────────────────────────────────────────────────
-mkdir -p "$PROJECT_ROOT/backend/data"
-mkdir -p "$PROJECT_ROOT/src-tauri/binaries"
-
-echo ""
-echo "═══════════════════════════════════════════════════════"
-echo "  Setup complete!"
-echo ""
-echo "  To start development:"
-echo "    make dev"
-echo ""
-echo "  To build for production:"
-echo "    make build"
-echo "═══════════════════════════════════════════════════════"
+echo "==> Setup complete. Run ./scripts/dev.sh to start."
