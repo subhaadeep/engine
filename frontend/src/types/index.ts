@@ -4,6 +4,7 @@ export interface GASession {
   filename: string;
   columns: string[];
   row_count: number;
+  id?: string; // alias
 }
 
 export interface OHLCVSession {
@@ -12,6 +13,7 @@ export interface OHLCVSession {
   row_count: number;
   date_from?: string | null;
   date_to?: string | null;
+  id?: string; // alias
 }
 
 export interface ImportStatus {
@@ -63,20 +65,20 @@ export interface Strategy {
 }
 
 export interface BacktestRunRequest {
-  ga_row_id: string;
-  strategy_id: string;
-  ohlcv_session_id: string;
+  ga_row_id: string | number;
+  strategy_id: string | number;
+  ohlcv_session_id: string | number;
 }
 
 export interface BacktestResult {
-  backtest_id: string;
+  backtest_id: string | number;
   status: string;
   error: string | null;
 }
 
 export interface Trade {
   id: number;
-  backtest_id: string;
+  backtest_id: string | number;
   trade_no: number;
   entry_date: string;
   exit_date: string;
@@ -108,7 +110,7 @@ export interface BacktestListItem {
 
 // ── Monte Carlo ───────────────────────────────────────────────────────────
 export interface MonteCarloRequest {
-  backtest_id: string;
+  backtest_id: string | number;
   n_simulations: number;
   initial_balance: number;
 }
@@ -120,7 +122,7 @@ export interface MCRunResponse {
 
 export interface MCResults {
   run_id: string;
-  backtest_id: string;
+  backtest_id: string | number;
   n_sims: number;
   mean_final_balance: number | null;
   median_final_balance: number | null;

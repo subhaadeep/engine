@@ -1,70 +1,103 @@
 @echo off
-if not "%1"=="elevated" (
-    powershell -WindowStyle Hidden -Command "Start-Process '%~f0' -ArgumentList 'elevated' -Verb RunAs" 2>nul
-    if %errorlevel% neq 0 (
-        powershell -WindowStyle Hidden -Command "Start-Process '%~f0' -ArgumentList 'elevated'"
-    )
-    exit /b
-)
-
-SETLOCAL ENABLEDELAYEDEXPANSION
+SETLOCAL
 SET REPO=%~dp0
-SET BACKEND=%REPO%backend
-SET FRONTEND=%REPO%frontend
 SET LOG=%TEMP%\ga-engine
 MD "%LOG%" 2>nul
 
-REM ─ Kill old processes silently
+title GA Engine
+color 0A
+echo.
+echo  ==============================
+echo    GA Engine - Starting...
+echo  ==============================
+echo.
+
+REM ── 1. Check git ──────────────────────────────
+where git >nul 2>&1 || (echo ERROR: Git not found. & pause & exit /b 1)
+echo [OK] Git found
+
+REM ── 2. Find Python ───────────────────────────
+SET PYTHON=
+FOR %%P IN (python3.11 python3.10 python3.9 python3 python) DO (
+  IF NOT DEFINED PYTHON (
+    WHERE %%P >nul 2>&1 && SET PYTHON=%%P
+  )
+)
+IF NOT DEFINED PYTHON (
+  echo ERROR: Python 3.9+ not found. Download from https://python.org
+  pause & exit /b 1
+)
+FOR /F "tokens=*" %%V IN ('%PYTHON% --version 2^>^&1') DO echo [OK] %%V
+
+REM ── 3. Check Node ────────────────────────────
+WHERE node >nul 2>&1 || (echo ERROR: Node.js not found. Download from https://nodejs.org & pause & exit /b 1)
+FOR /F "tokens=*" %%V IN ('node --version 2^>^&1') DO echo [OK] Node %%V
+
+REM ── 4. Backend venv ──────────────────────────
+cd /d "%REPO%backend"
+IF NOT EXIST ".venv" (
+  echo Creating Python virtual environment...
+  %PYTHON% -m venv .venv
+)
+echo Installing Python dependencies...
+.venv\Scripts\pip install -r requirements.txt -q
+echo [OK] Python deps ready
+
+REM ── 5. Frontend node_modules ─────────────────
+cd /d "%REPO%frontend"
+IF NOT EXIST "node_modules" (
+  echo Installing npm packages (first run - takes ~1 min)...
+  call npm install
+) ELSE (
+  echo [OK] node_modules already installed
+)
+
+REM ── 6. Kill old processes ────────────────────
 FOR /F "tokens=5" %%P IN ('netstat -ano 2^>nul ^| findstr ":8765 " ^| findstr "LISTENING"') DO taskkill /PID %%P /F >nul 2>&1
 FOR /F "tokens=5" %%P IN ('netstat -ano 2^>nul ^| findstr ":5173 " ^| findstr "LISTENING"') DO taskkill /PID %%P /F >nul 2>&1
+timeout /t 2 /nobreak >nul
+
+REM ── 7. Start backend ─────────────────────────
+cd /d "%REPO%backend"
+echo Starting backend on port 8765...
+start "GA-Backend" /B .venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8765 > "%LOG%\backend.log" 2>&1
+
+REM Wait for backend (up to 30s)
+echo Waiting for backend.
+SET /A _tries=0
+:WAIT_BACKEND
+SET /A _tries+=1
+powershell -Command "try{Invoke-RestMethod http://localhost:8765/api/health -EA Stop;exit 0}catch{exit 1}" >nul 2>&1
+IF %ERRORLEVEL% EQU 0 GOTO BACKEND_READY
+IF %_tries% GEQ 30 (echo [WARN] Backend slow to start & GOTO BACKEND_READY)
+SET /P _=<nul
 timeout /t 1 /nobreak >nul
+GOTO WAIT_BACKEND
+:BACKEND_READY
+echo [OK] Backend ready
 
-REM ─ Check git update silently
-cd /d "%REPO%"
-FOR /F %%i IN ('git rev-parse HEAD 2^>nul') DO SET BEFORE=%%i
-git fetch origin main --quiet >nul 2>&1
-FOR /F %%i IN ('git rev-parse origin/main 2^>nul') DO SET AFTER=%%i
-SET UPDATED=0
-IF "%BEFORE%" NEQ "%AFTER%" (
-    git pull origin main --quiet >nul 2>&1
-    SET UPDATED=1
-)
+REM ── 8. Start frontend ────────────────────────
+cd /d "%REPO%frontend"
+echo Starting frontend on port 5173...
+start "GA-Frontend" /B npm run dev > "%LOG%\frontend.log" 2>&1
+timeout /t 4 /nobreak >nul
 
-REM ─ Setup Python venv
-cd /d "%BACKEND%"
-IF NOT EXIST ".venv" (
-    python -m venv .venv >nul 2>&1
-    .venv\Scripts\pip install -r requirements.txt -q >nul 2>&1
-) ELSE IF "!UPDATED!"=="1" (
-    .venv\Scripts\pip install -r requirements.txt -q >nul 2>&1
-)
-
-REM ─ Setup frontend
-cd /d "%FRONTEND%"
-IF NOT EXIST "node_modules" (
-    call npm install --silent >nul 2>&1
-) ELSE IF "!UPDATED!"=="1" (
-    call npm install --silent >nul 2>&1
-)
-
-REM ─ Start backend silently
-cd /d "%BACKEND%"
-start "" /B powershell -WindowStyle Hidden -Command ".venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8765 *> '%LOG%\backend.log'"
-
-REM ─ Wait for backend
-:WAIT
-powershell -WindowStyle Hidden -Command "try{Invoke-RestMethod http://localhost:8765/api/health -EA Stop;exit 0}catch{exit 1}" >nul 2>&1
-IF %ERRORLEVEL% NEQ 0 ( timeout /t 1 /nobreak >nul & goto WAIT )
-
-REM ─ Start frontend silently
-cd /d "%FRONTEND%"
-start "" /B powershell -WindowStyle Hidden -Command "npm run dev *> '%LOG%\frontend.log'"
-timeout /t 3 /nobreak >nul
-
-REM ─ Open browser
+REM ── 9. Open browser ──────────────────────────
 start "" http://localhost:5173
 
-REM ─ Tray notification
-powershell -WindowStyle Hidden -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms');$n=New-Object System.Windows.Forms.NotifyIcon;$n.Icon=[System.Drawing.SystemIcons]::Application;$n.Visible=$true;$n.ShowBalloonTip(4000,'GA Engine','Running at http://localhost:5173',[System.Windows.Forms.ToolTipIcon]::Info);Start-Sleep 5;$n.Dispose()"
+echo.
+echo  ==============================
+echo    Engine running!
+echo    http://localhost:5173
+echo  ==============================
+echo.
+echo  Logs: %LOG%
+echo.
+echo  Press any key to STOP the engine...
+pause >nul
 
-exit /b
+REM Cleanup
+taskkill /FI "WINDOWTITLE eq GA-Backend*" /F >nul 2>&1
+taskkill /FI "WINDOWTITLE eq GA-Frontend*" /F >nul 2>&1
+echo Engine stopped.
+timeout /t 2 /nobreak >nul
