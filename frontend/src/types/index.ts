@@ -1,29 +1,24 @@
 // ── Import ────────────────────────────────────────────────────────────────
 export interface GASession {
-  id: number;
+  session_id: string;
   filename: string;
   columns: string[];
   row_count: number;
 }
 
 export interface OHLCVSession {
-  id: number;
+  session_id: string;
   filename: string;
   row_count: number;
-  date_from: string | null;
-  date_to: string | null;
+  date_from?: string | null;
+  date_to?: string | null;
 }
 
 export interface ImportStatus {
-  ga_session_id: number | null;
+  ga_session_id: string | null;
   ga_filename: string | null;
-  ga_row_count: number;
-  ga_columns: string[];
-  ohlcv_session_id: number | null;
+  ohlcv_session_id: string | null;
   ohlcv_filename: string | null;
-  ohlcv_row_count: number;
-  ohlcv_date_from?: string | null;
-  ohlcv_date_to?: string | null;
   ready: boolean;
 }
 
@@ -32,7 +27,7 @@ export interface ColumnRange {
   name: string;
   min_val: number | null;
   max_val: number | null;
-  dtype: string; // 'numeric' | 'string'
+  dtype: string;
 }
 
 export interface FilterRule {
@@ -42,7 +37,7 @@ export interface FilterRule {
 }
 
 export interface FilterConfig {
-  session_id: number;
+  session_id: string;
   columns: Record<string, FilterRule>;
   top_n: number;
   rank_by: string;
@@ -62,33 +57,26 @@ export interface FilterResponse {
 
 // ── Strategy / Backtest ───────────────────────────────────────────────────
 export interface Strategy {
-  id: number;
+  id: string;
   filename: string;
   created_at?: string;
 }
 
-/**
- * Payload sent to POST /api/backtest/run
- * Matches backend BacktestRunRequest schema exactly.
- */
 export interface BacktestRunRequest {
-  ga_row_id: number;        // ID of the specific GARow to use
-  strategy_id: number;      // ID of the uploaded Strategy
-  ohlcv_session_id: number; // ID of the OHLCVSession
+  ga_row_id: string;
+  strategy_id: string;
+  ohlcv_session_id: string;
 }
 
-/** @deprecated use BacktestRunRequest */
-export type BacktestRequest = BacktestRunRequest;
-
 export interface BacktestResult {
-  backtest_id: number;
+  backtest_id: string;
   status: string;
   error: string | null;
 }
 
 export interface Trade {
   id: number;
-  backtest_id: number;
+  backtest_id: string;
   trade_no: number;
   entry_date: string;
   exit_date: string;
@@ -107,10 +95,10 @@ export interface TradesResponse {
 }
 
 export interface BacktestListItem {
-  id: number;
-  ga_row_id: number;
-  strategy_id: number;
-  ohlcv_session_id: number;
+  id: string;
+  ga_row_id: string;
+  strategy_id: string;
+  ohlcv_session_id: string;
   status: string;
   trade_count: number;
   net_profit: number | null;
@@ -120,36 +108,32 @@ export interface BacktestListItem {
 
 // ── Monte Carlo ───────────────────────────────────────────────────────────
 export interface MonteCarloRequest {
-  backtest_id: number;
+  backtest_id: string;
   n_simulations: number;
   initial_balance: number;
 }
 
 export interface MCRunResponse {
-  run_id: number;
+  run_id: string;
   status: string;
 }
 
-/**
- * Matches backend MCResultsResponse schema exactly.
- */
 export interface MCResults {
-  run_id: number;
-  backtest_id: number;
-  n_simulations: number;
-  initial_balance: number;
-  mean_final_balance: number;
-  median_final_balance: number;
-  max_final_balance: number;
-  min_final_balance: number;
-  mean_return_pct: number;
-  median_return_pct: number;
-  avg_drawdown: number;
-  worst_drawdown: number;
-  risk_of_ruin: number;
-  equity_curves_packed: { x: (number | null)[]; y: (number | null)[] };
-  balance_histogram: { bin_edges: number[]; counts: number[] };
-  drawdown_histogram: { bin_edges: number[]; counts: number[] };
+  run_id: string;
+  backtest_id: string;
+  n_sims: number;
+  mean_final_balance: number | null;
+  median_final_balance: number | null;
+  std_final_balance: number | null;
+  pct_profitable: number | null;
+  var_95: number | null;
+  cvar_95: number | null;
+  balance_histogram: {
+    bin_edges: number[];
+    counts: number[];
+  } | null;
+  equity_curves_sample: number[][] | null;
+  created_at: string | null;
 }
 
 export type NavPage = 'import' | 'filter' | 'explorer' | 'backtest' | 'montecarlo';

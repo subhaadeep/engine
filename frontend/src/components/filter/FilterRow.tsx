@@ -1,132 +1,91 @@
-import React, { useCallback } from 'react';
-import { Box, Typography, Switch, TextField, alpha } from '@mui/material';
+import React from 'react';
+import {
+  Box, Typography, Slider, Switch, TextField, alpha, useMediaQuery, useTheme,
+} from '@mui/material';
 import type { ColumnRange, FilterRule } from '../../types';
 
 interface FilterRowProps {
-  columnRange: ColumnRange;
+  column: ColumnRange;
   rule: FilterRule;
   onChange: (rule: FilterRule) => void;
-  style: React.CSSProperties;
 }
 
-const FilterRow: React.FC<FilterRowProps> = ({ columnRange, rule, onChange, style }) => {
-  const handleToggle = useCallback(() => {
-    onChange({ ...rule, enabled: !rule.enabled });
-  }, [rule, onChange]);
-
-  const handleMinChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value === '' ? null : parseFloat(e.target.value);
-      onChange({ ...rule, min_val: val });
-    },
-    [rule, onChange]
-  );
-
-  const handleMaxChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value === '' ? null : parseFloat(e.target.value);
-      onChange({ ...rule, max_val: val });
-    },
-    [rule, onChange]
-  );
+const FilterRow: React.FC<FilterRowProps> = ({ column, rule, onChange }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isNumeric = column.dtype !== 'string';
+  const minVal = column.min_val ?? 0;
+  const maxVal = column.max_val ?? 1;
+  const range: [number, number] = [rule.min_val ?? minVal, rule.max_val ?? maxVal];
 
   return (
     <Box
-      style={style}
       sx={{
-        display: 'flex',
-        alignItems: 'center',
-        px: 2,
-        gap: 1.5,
-        opacity: rule.enabled ? 1 : 0.45,
-        transition: 'opacity 0.2s ease, background-color 0.2s ease',
-        borderBottom: '1px solid rgba(45,55,72,0.3)',
-        backgroundColor: rule.enabled ? alpha('#6366F1', 0.03) : 'transparent',
-        '&:hover': {
-          backgroundColor: alpha('#6366F1', 0.05),
-        },
+        p: { xs: 1.5, sm: 2 },
+        borderRadius: 2,
+        border: `1px solid ${rule.enabled ? alpha('#6366F1', 0.3) : alpha('#2D3748', 0.5)}`,
+        backgroundColor: rule.enabled ? alpha('#6366F1', 0.04) : alpha('#111827', 0.5),
+        transition: 'all 0.2s',
+        opacity: rule.enabled ? 1 : 0.6,
       }}
     >
-      {/* Toggle */}
-      <Switch
-        size="small"
-        checked={rule.enabled}
-        onChange={handleToggle}
-        sx={{ flexShrink: 0 }}
-      />
-
-      {/* Parameter Name */}
-      <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: rule.enabled && isNumeric ? 1.5 : 0 }}>
         <Typography
-          variant="body2"
           sx={{
-            fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-            fontSize: '0.78rem',
-            fontWeight: 500,
+            fontSize: { xs: '0.75rem', sm: '0.8rem' },
+            fontWeight: 600,
             color: rule.enabled ? '#F1F5F9' : '#64748B',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            transition: 'color 0.2s',
+            fontFamily: 'monospace',
+            wordBreak: 'break-all',
+            mr: 1,
           }}
-          title={columnRange.name}
         >
-          {columnRange.name}
+          {column.name}
         </Typography>
-        <Typography variant="caption" sx={{ color: '#475569', fontSize: '0.65rem' }}>
-          {columnRange.dtype} · [{columnRange.min_val.toFixed(2)}, {columnRange.max_val.toFixed(2)}]
-        </Typography>
+        <Switch
+          size="small"
+          checked={rule.enabled}
+          onChange={(e) => onChange({ ...rule, enabled: e.target.checked })}
+          sx={{ flexShrink: 0 }}
+        />
       </Box>
 
-      {/* Min Input */}
-      <TextField
-        type="number"
-        size="small"
-        value={rule.min_val ?? ''}
-        onChange={handleMinChange}
-        disabled={!rule.enabled}
-        placeholder={`${columnRange.min_val}`}
-        inputProps={{
-          style: { fontSize: '0.78rem', padding: '4px 8px', textAlign: 'right' },
-          step: 'any',
-        }}
-        sx={{
-          width: 110,
-          flexShrink: 0,
-          pointerEvents: rule.enabled ? 'auto' : 'none',
-          '& .MuiOutlinedInput-root': {
-            backgroundColor: alpha('#0A0E1A', 0.6),
-            '& input': { color: '#10B981' },
-          },
-        }}
-        label="Min"
-      />
-
-      {/* Max Input */}
-      <TextField
-        type="number"
-        size="small"
-        value={rule.max_val ?? ''}
-        onChange={handleMaxChange}
-        disabled={!rule.enabled}
-        placeholder={`${columnRange.max_val}`}
-        inputProps={{
-          style: { fontSize: '0.78rem', padding: '4px 8px', textAlign: 'right' },
-          step: 'any',
-        }}
-        sx={{
-          width: 110,
-          flexShrink: 0,
-          pointerEvents: rule.enabled ? 'auto' : 'none',
-          '& .MuiOutlinedInput-root': {
-            backgroundColor: alpha('#0A0E1A', 0.6),
-            '& input': { color: '#EF4444' },
-          },
-        }}
-        label="Max"
-      />
+      {rule.enabled && isNumeric && (
+        <Box>
+          <Slider
+            value={range}
+            min={minVal}
+            max={maxVal}
+            step={(maxVal - minVal) / 100 || 0.01}
+            onChange={(_, v) => {
+              const [lo, hi] = v as number[];
+              onChange({ ...rule, min_val: lo, max_val: hi });
+            }}
+            size="small"
+            sx={{ color: '#6366F1', mb: 1 }}
+          />
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <TextField
+              size="small"
+              label="Min"
+              type="number"
+              value={rule.min_val ?? ''}
+              onChange={(e) => onChange({ ...rule, min_val: Number(e.target.value) })}
+              sx={{ flex: 1, '& .MuiInputBase-root': { fontSize: '0.75rem' } }}
+            />
+            <TextField
+              size="small"
+              label="Max"
+              type="number"
+              value={rule.max_val ?? ''}
+              onChange={(e) => onChange({ ...rule, max_val: Number(e.target.value) })}
+              sx={{ flex: 1, '& .MuiInputBase-root': { fontSize: '0.75rem' } }}
+            />
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 };
 
-export default React.memo(FilterRow);
+export default FilterRow;
