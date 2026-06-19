@@ -1,52 +1,48 @@
 #!/bin/bash
-# macOS — double-click to pull latest code from GitHub and restart
+# ===================================================
+# GA ENGINE — UPDATE  (macOS double-click launcher)
+# Run this after pulling new code to force-reinstall
+# ===================================================
 REPO="$(cd "$(dirname "$0")" && pwd)"
 
-echo "Pulling latest from GitHub..."
-cd "$REPO"
+echo "╔══════════════════════════════╗"
+echo "║      GA Engine Updater       ║"
+echo "╚══════════════════════════════╝"
+echo ""
 
-git fetch origin main -q
-BEFORE=$(git rev-parse HEAD)
-AFTER=$(git rev-parse origin/main)
-
-if [ "$BEFORE" = "$AFTER" ]; then
-    echo "Already up to date! No restart needed."
-    sleep 2
-    exit 0
-fi
-
-git pull origin main -q
-echo "Updated! Installing any new dependencies..."
-
-# Update Python deps if changed
-cd "$REPO/backend"
-.venv/bin/pip install -r requirements.txt -q 2>/dev/null
-
-# Update npm deps if changed
-cd "$REPO/frontend"
-npm install --silent 2>/dev/null
-
-# Kill old processes
+# Kill running processes first
+echo "🔴 Stopping running engine..."
 lsof -ti:8765 | xargs kill -9 2>/dev/null
 lsof -ti:5173 | xargs kill -9 2>/dev/null
 sleep 1
 
-# Restart backend
+# ── 1. Git pull ────────────────────────────────
+cd "$REPO"
+echo "📥 Pulling latest code..."
+git fetch origin
+git reset --hard origin/main
+git clean -fd
+echo "✓ Code updated to latest"
+
+# ── 2. Force reinstall Python deps ─────────────────────
 cd "$REPO/backend"
-.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8765 > /tmp/ga-engine/backend.log 2>&1 &
+if [ ! -d ".venv" ]; then
+  echo "📦 Creating Python virtual environment..."
+  python3 -m venv .venv
+fi
+echo "📦 Force reinstalling Python packages..."
+.venv/bin/pip install -r requirements.txt --upgrade -q
+echo "✓ Python deps updated"
 
-# Wait for it
-for i in {1..20}; do
-    curl -s http://localhost:8765/api/health >/dev/null 2>&1 && break
-    sleep 1
-done
-
-# Restart frontend
+# ── 3. Force reinstall npm deps ───────────────────────
 cd "$REPO/frontend"
-npm run dev > /tmp/ga-engine/frontend.log 2>&1 &
-sleep 3
+echo "📦 Force reinstalling npm packages..."
+rm -rf node_modules package-lock.json
+npm install
+echo "✓ Node deps updated"
 
-open http://localhost:5173
-echo "Engine updated and restarted! http://localhost:5173"
-echo "Close this window when done."
-wait
+echo ""
+echo "✅ Update complete!"
+echo "   Now run START-ENGINE.command to launch."
+echo ""
+read -r -p "Press Enter to exit..."
