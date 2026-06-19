@@ -1,165 +1,102 @@
-"""
-GA Parameter Explorer — Import Router
-Handles GA results CSV and OHLCV price data uploads.
-"""
-from __future__ import annotations
-
-import json
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
+from datetime import datetime, timedelta
+import logging
 
 from app.core.database import get_db
-from app.services import ga_import_service, ohlcv_service
+from app.models.models import GASession, OHLCVSession
+from app.services.import_service import process_ga_csv, process_ohlcv_csv
+from app.schemas.schemas import ImportStatusResponse, SessionListItem
 
-router = APIRouter(prefix="/api/import", tags=["import"])
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/import", tags=["import"])
 
+STALE_DAYS = 7
 
-# ---------------------------------------------------------------------------
-# GA Results
-# ---------------------------------------------------------------------------
-
-@router.post("/ga-results", summary="Upload GA results CSV")
-async def upload_ga_results(
-    file: UploadFile = File(..., description="GA results CSV file"),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Upload a CSV file produced by the genetic-algorithm optimiser.
-
-    Returns session metadata and the detected column list.
-    """
-    if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only .csv files are accepted for GA results.",
-        )
-    try:
-        content = await file.read()
-        session = await ga_import_service.import_ga_csv(content, file.filename, db)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Import failed: {exc}",
-        )
-
-    return {
-        "session_id": session.id,
-        "filename": session.filename,
-        "columns": json.loads(session.columns),
-        "row_count": session.row_count,
-    }
+async def _purge_old_sessions(db: AsyncSession):
+    """Delete GA and OHLCV sessions older than STALE_DAYS."""
+    cutoff = datetime.utcnow() - timedelta(days=STALE_DAYS)
+    await db.execute(delete(GASession).where(GASession.created_at < cutoff))
+    await db.execute(delete(OHLCVSession).where(OHLCVSession.created_at < cutoff))
+    await db.commit()
 
 
-# ---------------------------------------------------------------------------
-# OHLCV Price Data
-# ---------------------------------------------------------------------------
-
-@router.post("/ohlcv", summary="Upload OHLCV price data CSV")
-async def upload_ohlcv(
-    file: UploadFile = File(..., description="OHLCV price data CSV (Date, Open, High, Low, Close required)"),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Upload an OHLCV price data CSV.
-
-    Required columns: Date, Open, High, Low, Close (case-insensitive).
-    Volume is optional.
-    """
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Missing filename.")
-    ext = file.filename.lower().split(".")[-1]
-    if ext not in ("csv",):
-        raise HTTPException(status_code=400, detail="Only .csv files are accepted for OHLCV data.")
-
-    try:
-        content = await file.read()
-        session = await ohlcv_service.import_ohlcv_csv(content, file.filename, db)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"OHLCV import failed: {exc}",
-        )
-
-    return {
-        "session_id": session.id,
-        "filename": session.filename,
-        "row_count": session.row_count,
-        "date_from": session.date_from,
-        "date_to": session.date_to,
-        "columns": json.loads(session.columns),
-    }
-
-
-# ---------------------------------------------------------------------------
-# Status / Health Check
-# ---------------------------------------------------------------------------
-
-@router.get("/status", summary="Check import readiness")
+@router.get("/status", response_model=ImportStatusResponse)
 async def get_status(db: AsyncSession = Depends(get_db)):
-    """
-    Returns the most recently imported GA session and OHLCV session.
-    ``ready`` is True only when both are present.
-    """
-    try:
-        ga = await ga_import_service.get_current_ga_session(db)
-        ohlcv = await ohlcv_service.get_current_ohlcv_session(db)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-    return {
-        "ga_session_id": ga.id if ga else None,
-        "ga_filename": ga.filename if ga else None,
-        "ga_row_count": ga.row_count if ga else 0,
-        "ga_columns": json.loads(ga.columns) if ga else [],
-        "ohlcv_session_id": ohlcv.id if ohlcv else None,
-        "ohlcv_filename": ohlcv.filename if ohlcv else None,
-        "ohlcv_row_count": ohlcv.row_count if ohlcv else 0,
-        "ohlcv_date_from": ohlcv.date_from if ohlcv else None,
-        "ohlcv_date_to": ohlcv.date_to if ohlcv else None,
-        "ready": ga is not None and ohlcv is not None,
-    }
+    await _purge_old_sessions(db)
+    ga = (await db.execute(select(GASession).order_by(GASession.created_at.desc()).limit(1))).scalar_one_or_none()
+    ohlcv = (await db.execute(select(OHLCVSession).order_by(OHLCVSession.created_at.desc()).limit(1))).scalar_one_or_none()
+    return ImportStatusResponse(
+        ga_session_id=ga.id if ga else None,
+        ga_filename=ga.filename if ga else None,
+        ohlcv_session_id=ohlcv.id if ohlcv else None,
+        ohlcv_filename=ohlcv.filename if ohlcv else None,
+        ready=bool(ga and ohlcv),
+    )
 
 
-@router.get("/ga-sessions", summary="List all GA sessions")
+@router.get("/sessions/ga", response_model=list[SessionListItem])
 async def list_ga_sessions(db: AsyncSession = Depends(get_db)):
-    """Return a summary list of all imported GA sessions."""
-    from sqlalchemy import select
-    from app.models.models import GASession
-    result = await db.execute(select(GASession).order_by(GASession.id.desc()))
-    sessions = result.scalars().all()
-    return {
-        "sessions": [
-            {
-                "id": s.id,
-                "filename": s.filename,
-                "row_count": s.row_count,
-                "columns": json.loads(s.columns),
-                "created_at": str(s.created_at),
-            }
-            for s in sessions
-        ]
-    }
+    await _purge_old_sessions(db)
+    rows = (await db.execute(select(GASession).order_by(GASession.created_at.desc()).limit(20))).scalars().all()
+    return [
+        SessionListItem(
+            id=r.id,
+            filename=r.filename,
+            row_count=r.row_count,
+            created_at=r.created_at.isoformat(),
+            expires_at=(r.created_at + timedelta(days=STALE_DAYS)).isoformat(),
+        )
+        for r in rows
+    ]
 
 
-@router.get("/ohlcv-sessions", summary="List all OHLCV sessions")
+@router.get("/sessions/ohlcv", response_model=list[SessionListItem])
 async def list_ohlcv_sessions(db: AsyncSession = Depends(get_db)):
-    """Return a summary list of all imported OHLCV sessions."""
-    sessions = await ohlcv_service.list_ohlcv_sessions(db)
-    return {
-        "sessions": [
-            {
-                "id": s.id,
-                "filename": s.filename,
-                "row_count": s.row_count,
-                "date_from": s.date_from,
-                "date_to": s.date_to,
-                "created_at": str(s.created_at),
-            }
-            for s in sessions
-        ]
-    }
+    await _purge_old_sessions(db)
+    rows = (await db.execute(select(OHLCVSession).order_by(OHLCVSession.created_at.desc()).limit(20))).scalars().all()
+    return [
+        SessionListItem(
+            id=r.id,
+            filename=r.filename,
+            row_count=r.row_count,
+            created_at=r.created_at.isoformat(),
+            expires_at=(r.created_at + timedelta(days=STALE_DAYS)).isoformat(),
+        )
+        for r in rows
+    ]
+
+
+@router.post("/select/ga")
+async def select_ga_session(session_id: str, db: AsyncSession = Depends(get_db)):
+    row = await db.get(GASession, session_id)
+    if not row:
+        raise HTTPException(404, "GA session not found or expired")
+    return {"session_id": row.id, "filename": row.filename, "row_count": row.row_count, "columns": row.columns}
+
+
+@router.post("/select/ohlcv")
+async def select_ohlcv_session(session_id: str, db: AsyncSession = Depends(get_db)):
+    row = await db.get(OHLCVSession, session_id)
+    if not row:
+        raise HTTPException(404, "OHLCV session not found or expired")
+    return {"session_id": row.id, "filename": row.filename, "row_count": row.row_count}
+
+
+@router.post("/ga")
+async def upload_ga(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    if not file.filename.endswith(('.csv', '.txt')):
+        raise HTTPException(400, "Only CSV/TXT files accepted")
+    content = await file.read()
+    result = await process_ga_csv(content, file.filename, db)
+    return result
+
+
+@router.post("/ohlcv")
+async def upload_ohlcv(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    if not file.filename.endswith(('.csv', '.txt')):
+        raise HTTPException(400, "Only CSV/TXT files accepted")
+    content = await file.read()
+    result = await process_ohlcv_csv(content, file.filename, db)
+    return result
