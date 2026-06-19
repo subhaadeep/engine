@@ -1,46 +1,74 @@
-# GA Engine Launcher
+# GA Engine — Local Launcher
 
-Double-click one file on your local PC — it auto-updates from GitHub and restarts the engine on your VPS.
+Run the entire engine on your **local computer** (no VPS needed).  
+One double-click: pulls latest code, sets up env, starts backend + frontend, opens browser.
 
-## First-Time Setup (One Time Only)
+---
 
-### Windows PC
-1. Double-click `setup-ssh-key.bat`
-2. Enter your VPS password when asked (only this once)
-3. Done — SSH key is saved, no more passwords
+## Requirements (install once)
 
-### Mac/Linux PC
-1. Open Terminal, run: `bash setup-ssh-key.sh`
-2. Enter your VPS password when asked (only this once)
-3. Done
+| Tool | Windows | Mac |
+|---|---|---|
+| Git | [git-scm.com](https://git-scm.com/download/win) | `brew install git` |
+| Python 3.10+ | [python.org](https://www.python.org/downloads/) | `brew install python3` |
+| Node.js 18+ | [nodejs.org](https://nodejs.org/) | `brew install node` |
+
+---
+
+## First-Time Setup
+
+### Windows
+```
+1. Install Git, Python, Node.js (links above)
+2. Open PowerShell:
+   git clone https://github.com/subhaadeep/engine.git C:\engine
+3. Double-click: C:\engine\launcher\launch-local.bat
+   (first run takes 2-3 min to install all packages)
+```
+
+### Mac
+```
+1. Install tools: brew install git python3 node
+2. Open Terminal:
+   git clone https://github.com/subhaadeep/engine.git ~/engine
+   chmod +x ~/engine/launcher/launch-local.sh
+3. Double-click: ~/engine/launcher/launch-local.sh
+   (first run takes 2-3 min to install all packages)
+```
+
+---
 
 ## Daily Use
 
-### Windows
-- Double-click **`launch-engine.bat`**
-- It will: check GitHub → pull if updated → rebuild if needed → restart services → open browser
+| OS | Action |
+|---|---|
+| **Windows** | Double-click `launcher/launch-local.bat` |
+| **Mac** | Double-click `launcher/launch-local.sh` |
 
-### Mac/Linux
-- Double-click **`launch-engine.sh`** (or right-click → Open)
-- Or run: `bash launch-engine.sh`
+The launcher automatically:
+- Checks GitHub for new commits
+- Pulls + rebuilds only if there are updates
+- Starts backend on `http://localhost:8765`
+- Starts frontend on `http://localhost:5173`
+- Opens browser automatically
 
-## What It Does Each Time
+**Press any key (Windows) or Ctrl+C (Mac) to stop.**
 
-```
-1. SSH into your VPS
-2. git fetch — check if GitHub has new commits
-3. If yes: git pull + npm install + vite build (rebuild frontend)
-4. Stop old backend/frontend processes
-5. Start fresh backend (uvicorn port 8765)
-6. Start fresh frontend (serve port 3000)
-7. Print the URL + open browser (Windows only)
-```
+---
 
-## No Update = Fast Start
-If GitHub has no new commits, it skips the rebuild step and just restarts the services in ~5 seconds.
+## URLs
 
-## Customize VPS IP
-If your VPS IP changes, edit the top of `launch-engine.bat` or `launch-engine.sh`:
-```
-SET VPS_IP=YOUR_NEW_IP
-```
+| Service | URL |
+|---|---|
+| Frontend (App) | http://localhost:5173 |
+| Backend API Docs | http://localhost:8765/docs |
+| Backend Health | http://localhost:8765/api/health |
+
+---
+
+## Logs
+
+| OS | Backend Log | Frontend Log |
+|---|---|---|
+| Windows | `backend\\backend.log` | `frontend\\frontend.log` |
+| Mac | `/tmp/ga-backend.log` | `/tmp/ga-frontend.log` |
