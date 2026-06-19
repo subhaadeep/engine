@@ -1,14 +1,9 @@
 """
-OHLCV / OHLC Import Service
+OHLCV / OHLC Import Service  —  v1.0.5
 
-Accepts CSV with OHLCV or OHLC (volume optional).
-Auto-detects timestamp format:
-  unix-ms  (1577916000000)
-  unix-s   (1577916000)
-  datetime ("2020-01-02 00:00:00")
-  date     ("2020-01-02")
-
-Data is NEVER auto-deleted.
+Fixes
+  - Removed `infer_datetime_format` (dropped in pandas 2.2)
+  - Safer timestamp parsing with explicit formats
 """
 from __future__ import annotations
 
@@ -44,13 +39,12 @@ def _detect_ts_col(df: pd.DataFrame) -> Optional[str]:
     for col in df.columns:
         if col.strip().lower() in _TIMESTAMP_NAMES:
             return col
-    # Fallback: first column — check if it looks like a timestamp
     first = df.columns[0]
     sample = df[first].dropna().iloc[0] if not df[first].dropna().empty else None
     if sample is not None:
         try:
             v = float(sample)
-            if 1e9 <= v <= 9.9e12:   # unix-s or unix-ms range
+            if 1e9 <= v <= 9.9e12:
                 return first
         except (TypeError, ValueError):
             pass
@@ -63,6 +57,7 @@ def _detect_ts_col(df: pd.DataFrame) -> Optional[str]:
 
 
 def _parse_ts(series: pd.Series) -> pd.Series:
+    """Parse timestamps — works on pandas 2.x (no infer_datetime_format)."""
     sample = series.dropna().iloc[0] if not series.dropna().empty else None
     if sample is not None:
         try:
@@ -73,7 +68,8 @@ def _parse_ts(series: pd.Series) -> pd.Series:
                 return pd.to_datetime(series, unit="s", errors="coerce")
         except (TypeError, ValueError):
             pass
-    return pd.to_datetime(series, infer_datetime_format=True, errors="coerce")
+    # pandas 2.x: just use to_datetime with no deprecated kwargs
+    return pd.to_datetime(series, errors="coerce")
 
 
 def _normalise(df: pd.DataFrame) -> pd.DataFrame:

@@ -1,5 +1,5 @@
 """
-GA Engine Backend  —  v1.0.4
+GA Engine Backend  —  v1.0.5
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-APP_VERSION = "1.0.4"
+APP_VERSION = "1.0.5"
 
 
 @asynccontextmanager
@@ -50,8 +50,6 @@ app.add_middleware(
 )
 
 
-# ── System endpoints ──────────────────────────────────────────────────────────
-
 @app.get("/api/version", tags=["system"])
 def version():
     return {
@@ -68,10 +66,6 @@ def health():
     return {"status": "ok", "version": APP_VERSION}
 
 
-# ── Domain routers ────────────────────────────────────────────────────────────────
-# Routers own their full prefix (e.g. /api/import).
-# Include with NO extra prefix here — prevents double-prefix.
-
 from app.routers.import_router     import router as import_router      # noqa: E402
 from app.routers.filter_router     import router as filter_router      # noqa: E402
 from app.routers.backtest_router   import router as backtest_router    # noqa: E402
@@ -82,8 +76,6 @@ app.include_router(filter_router)
 app.include_router(backtest_router)
 app.include_router(montecarlo_router)
 
-
-# ── Serve built frontend (production only) ──────────────────────────────────
 
 FRONTEND_DIST = os.path.join(
     os.path.dirname(__file__), "..", "..", "frontend", "dist"
