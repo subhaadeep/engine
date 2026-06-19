@@ -2,18 +2,18 @@ import { apiClient } from './client';
 import type { GASession, OHLCVSession, ImportStatus } from '../types';
 
 export async function uploadGAResults(file: File): Promise<GASession> {
-  const formData = new FormData();
-  formData.append('file', file);
-  const { data } = await apiClient.post<GASession>('/import/ga-results', formData, {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await apiClient.post<GASession>('/import/ga-results', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return data;
 }
 
 export async function uploadOHLCV(file: File): Promise<OHLCVSession> {
-  const formData = new FormData();
-  formData.append('file', file);
-  const { data } = await apiClient.post<OHLCVSession>('/import/ohlcv', formData, {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await apiClient.post<OHLCVSession>('/import/ohlcv', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return data;

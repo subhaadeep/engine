@@ -1,26 +1,20 @@
 import { apiClient } from './client';
-import type { Strategy, BacktestRunRequest, BacktestResult, TradesResponse } from '../types';
+import type {
+  Strategy, BacktestRunRequest, BacktestResult,
+  TradesResponse, BacktestListItem,
+} from '../types';
 
 export async function uploadStrategy(file: File): Promise<Strategy> {
-  const formData = new FormData();
-  formData.append('file', file);
-  const { data } = await apiClient.post<{ strategy_id: number; filename: string }>(
-    '/backtest/upload-strategy',
-    formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
-  );
-  return { id: data.strategy_id, filename: data.filename };
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await apiClient.post<Strategy>('/backtest/upload-strategy', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
 }
 
 export async function listStrategies(): Promise<Strategy[]> {
-  const { data } = await apiClient.get<Array<{ id: number; filename: string; created_at: string }>>(
-    '/backtest/strategies'
-  );
-  return data.map((s) => ({ id: s.id, filename: s.filename, created_at: s.created_at }));
-}
-
-export async function getStrategySource(strategyId: number): Promise<{ strategy_id: number; filename: string; content: string }> {
-  const { data } = await apiClient.get(`/backtest/strategies/${strategyId}/source`);
+  const { data } = await apiClient.get<Strategy[]>('/backtest/strategies');
   return data;
 }
 
@@ -29,8 +23,8 @@ export async function runBacktest(req: BacktestRunRequest): Promise<BacktestResu
   return data;
 }
 
-export async function getTrades(
-  backtestId: number,
+export async function getBacktestTrades(
+  backtestId: string | number,
   page = 1,
   limit = 100
 ): Promise<TradesResponse> {
@@ -40,12 +34,12 @@ export async function getTrades(
   return data;
 }
 
-export async function getBacktest(backtestId: number) {
-  const { data } = await apiClient.get(`/backtest/${backtestId}`);
+export async function listBacktests(): Promise<BacktestListItem[]> {
+  const { data } = await apiClient.get<BacktestListItem[]>('/backtest/list');
   return data;
 }
 
-export async function listBacktests(limit = 50) {
-  const { data } = await apiClient.get(`/backtest/list?limit=${limit}`);
+export async function getStrategySource(strategyId: string | number): Promise<{ source: string }> {
+  const { data } = await apiClient.get<{ source: string }>(`/backtest/strategy/${strategyId}/source`);
   return data;
 }

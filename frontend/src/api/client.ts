@@ -1,12 +1,12 @@
 import axios from 'axios';
 
-// In dev (npm run dev): Vite proxy forwards /api -> http://127.0.0.1:8765
-// In production build: set VITE_API_BASE env var or use relative /api
+// Vite proxy forwards /api -> http://127.0.0.1:8765 during dev
+// Set VITE_API_BASE env var to override in production
 const BASE = import.meta.env.VITE_API_BASE ?? '/api';
 
 const apiClient = axios.create({
   baseURL: BASE,
-  timeout: 120_000,
+  timeout: 180_000, // 3 min — large file uploads
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -18,4 +18,6 @@ apiClient.interceptors.response.use(
   }
 );
 
-export default apiClient;
+// Export BOTH ways so any import style works
+export { apiClient };          // named:   import { apiClient } from './client'
+export default apiClient;      // default: import apiClient from './client'
