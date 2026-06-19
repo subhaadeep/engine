@@ -8,28 +8,28 @@ import {
 } from '@mui/material';
 import {
   Upload, FilterAlt, TableChart, PlayArrow, ShowChart,
-  Menu as MenuIcon, Close,
+  Menu as MenuIcon,
 } from '@mui/icons-material';
 
 const NAV_ITEMS = [
-  { label: 'Import', path: '/import', icon: <Upload /> },
-  { label: 'Filter', path: '/filter', icon: <FilterAlt /> },
-  { label: 'Explorer', path: '/explorer', icon: <TableChart /> },
-  { label: 'Backtest', path: '/backtest', icon: <PlayArrow /> },
-  { label: 'Monte Carlo', path: '/montecarlo', icon: <ShowChart /> },
+  { label: 'Import',      path: '/import',      icon: <Upload /> },
+  { label: 'Filter',      path: '/filter',      icon: <FilterAlt /> },
+  { label: 'Explorer',    path: '/explorer',    icon: <TableChart /> },
+  { label: 'Backtest',    path: '/backtest',    icon: <PlayArrow /> },
+  { label: 'Monte Carlo', path: '/montecarlo',  icon: <ShowChart /> },
 ];
 
 const DRAWER_WIDTH = 220;
 
 const SidebarContent: React.FC<{ currentPath: string; onNavigate: (p: string) => void }> = ({ currentPath, onNavigate }) => (
-  <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-    {/* Logo */}
-    <Box sx={{ p: 2.5, pb: 2 }}>
+  <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
+    <Box sx={{ p: 2.5, pb: 2, flexShrink: 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Box sx={{
           width: 32, height: 32, borderRadius: '8px',
           background: 'linear-gradient(135deg, #6366F1, #10B981)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
         }}>
           <ShowChart sx={{ fontSize: 18, color: '#fff' }} />
         </Box>
@@ -69,9 +69,9 @@ const SidebarContent: React.FC<{ currentPath: string; onNavigate: (p: string) =>
       })}
     </List>
     <Divider sx={{ borderColor: alpha('#2D3748', 0.4) }} />
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ p: 2, flexShrink: 0 }}>
       <Typography variant="caption" sx={{ color: '#334155', fontSize: '0.65rem' }}>
-        All computation runs on your VPS
+        Runs fully on your local machine
       </Typography>
     </Box>
   </Box>
@@ -84,19 +84,27 @@ const AppShell: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const currentNavIndex = NAV_ITEMS.findIndex(i => location.pathname.startsWith(i.path));
+  const currentNavIndex = Math.max(0, NAV_ITEMS.findIndex(i => location.pathname.startsWith(i.path)));
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#0A0E1A' }}>
+    <Box sx={{
+      display: 'flex',
+      height: '100vh',
+      backgroundColor: '#0A0E1A',
+      overflow: 'hidden',    // only the shell clips, not the body
+    }}>
       {/* Desktop Sidebar */}
       {!isMobile && (
         <Box
           component="nav"
           sx={{
-            width: DRAWER_WIDTH, flexShrink: 0,
+            width: DRAWER_WIDTH,
+            flexShrink: 0,
             borderRight: `1px solid ${alpha('#2D3748', 0.5)}`,
             backgroundColor: alpha('#111827', 0.8),
-            height: '100vh', position: 'sticky', top: 0,
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
           <SidebarContent currentPath={location.pathname} onNavigate={navigate} />
@@ -108,7 +116,13 @@ const AppShell: React.FC = () => {
         <Drawer
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
-          PaperProps={{ sx: { width: DRAWER_WIDTH, backgroundColor: '#111827', borderRight: `1px solid ${alpha('#2D3748', 0.5)}` } }}
+          PaperProps={{
+            sx: {
+              width: DRAWER_WIDTH,
+              backgroundColor: '#111827',
+              borderRight: `1px solid ${alpha('#2D3748', 0.5)}`,
+            },
+          }}
         >
           <SidebarContent
             currentPath={location.pathname}
@@ -117,14 +131,19 @@ const AppShell: React.FC = () => {
         </Drawer>
       )}
 
-      {/* Main area */}
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      {/* Main column */}
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh' }}>
         {/* Mobile Top Bar */}
         {isMobile && (
           <AppBar
             position="sticky"
             elevation={0}
-            sx={{ backgroundColor: alpha('#111827', 0.95), borderBottom: `1px solid ${alpha('#2D3748', 0.5)}`, backdropFilter: 'blur(8px)' }}
+            sx={{
+              backgroundColor: alpha('#111827', 0.95),
+              borderBottom: `1px solid ${alpha('#2D3748', 0.5)}`,
+              backdropFilter: 'blur(8px)',
+              flexShrink: 0,
+            }}
           >
             <Toolbar sx={{ minHeight: '52px !important', px: 2 }}>
               <IconButton edge="start" onClick={() => setDrawerOpen(true)} sx={{ mr: 1, color: '#94A3B8' }}>
@@ -147,14 +166,15 @@ const AppShell: React.FC = () => {
           </AppBar>
         )}
 
-        {/* Page content */}
+        {/* Scrollable page content */}
         <Box
           component="main"
           sx={{
             flex: 1,
-            p: { xs: 2, sm: 3 },
-            pb: { xs: 9, sm: 3 },  // extra bottom padding for mobile bottom nav
+            overflowY: 'auto',   // scroll here, not on body
             overflowX: 'hidden',
+            p: { xs: 2, sm: 3 },
+            pb: { xs: 10, sm: 3 }, // space for mobile bottom nav
           }}
         >
           <Outlet />

@@ -7,3 +7,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <App />
   </React.StrictMode>
 );
+
+// Hide loading splash once React is mounted
+if (typeof window.__hideSplash === 'function') {
+  window.__hideSplash();
+}
+
+declare global {
+  interface Window { __hideSplash?: () => void; }
+}
